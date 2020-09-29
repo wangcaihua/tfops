@@ -27,7 +27,7 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake;${CMAKE_MODULE_PATH}")
 ###############################################################################
 
 # add the data to the target, so it becomes visible in some IDE
-add_library(tfop SHARED ${sources} ${data})
+add_library(tfop SHARED ${sources} ${data} src/main/kernels/get_neighbor2_kernel.cpp src/main/kernels/sample_neighbor_sparse_kernel.cpp src/main/kernels/get_topk_neighbor_sparse_kernel.cpp src/main/ops/sample_neighbor_sparse.cpp src/main/ops/get_topk_neighbor_sparse.cpp)
 
 # just for example add some compiler flags
 target_compile_options(tfop PUBLIC -std=c++1y -Wall -Wfloat-conversion -D_GLIBCXX_USE_CXX11_ABI=0)
