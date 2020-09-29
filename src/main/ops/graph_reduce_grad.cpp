@@ -19,7 +19,7 @@ adj_tensor:        adj_tensor, must be 2-D int32 tensor
             .Output("graph_reduce_grad_out: float32")
             .SetShapeFn([](::tensorflow::shape_inference::InferenceContext *c) {
                 c->input_tensor(0)->dim_size(1);
-                c->set_output(0, c->input(0).);
+                c->set_output(0, c->input(0));
                 return Status::OK();
             });
 

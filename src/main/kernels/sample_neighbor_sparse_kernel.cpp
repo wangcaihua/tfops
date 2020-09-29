@@ -66,21 +66,20 @@ void SampleNeighborSparseOp::ComputeAsync(OpKernelContext *ctx, DoneCallback don
     Tensor* weights_value = nullptr;
     Tensor* types_value = nullptr;
     TensorShape index_shape;
-    output_shape.AddDim(indices_col1.size());
-    output_shape.AddDim(2);
+    index_shape.AddDim(indices_col1.size());
+    index_shape.AddDim(2);
     TensorShape value_shape;
-    output_shape.AddDim(indices_col1.size());
+    value_shape.AddDim(indices_col1.size());
 
     OP_REQUIRES_OK(ctx, ctx->allocate_output(0, index_shape, &indices));
     OP_REQUIRES_OK(ctx, ctx->allocate_output(1, value_shape, &neighbors_value));
     OP_REQUIRES_OK(ctx, ctx->allocate_output(2, value_shape, &weights_value));
     OP_REQUIRES_OK(ctx, ctx->allocate_output(3, value_shape, &types_value));
 
-    auto indices_matrix = indices.matrix<int64>();
+    auto indices_matrix = indices->matrix<int64>();
     auto neighbors_flat = neighbors_value->flat<int64>();
     auto weights_flat = weights_value->flat<float>();
     auto types_flat = types_value->flat<int32>();
-    ctx->SetAttr()
 
     for (int i=0; i< indices_col1.size(); i++) {
         indices_matrix(i, 0) = indices_col1[i];

@@ -1,5 +1,10 @@
+#include <vector>
+#include <iostream>
+
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/shape_inference.h"
+#include "tensorflow/core/framework/common_shape_fns.h"
+
 
 namespace tensorflow {
     const std::string op_doc = R"doc(
