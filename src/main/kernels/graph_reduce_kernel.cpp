@@ -17,82 +17,75 @@ public:
         const Tensor &dst_tensor = context->input(1);
         const Tensor &adj_tensor = context->input(2);
 
-        assert(dst_tensor.shape().dim_size(0) == adj_tensor.shape().dim_size(0));
+        assert(dst_tensor.shape().dim_size(0) <= adj_tensor.shape().dim_size(0));
 
-        auto max_len = src_tensor.dim_size(0);
-        auto &shape = dst_tensor.shape();
-        const int N = shape.dim_size(0);
-        auto output_shape = TensorShape();
-        output_shape.AddDim(max_len);
+        const int num_src = src_tensor.dim_size(0);
+        const int num_edge = adj_tensor.dim_size(0);
+        // const int num_dst = dst_tensor.dim_size(0);
 
         Tensor *output_tensor = nullptr;
+        OP_REQUIRES_OK(context, context->allocate_output(0, src_tensor.shape(), &output_tensor));
         auto adjs = adj_tensor.matrix<int32>();
 
-        if (shape.dims() == 1) {
-            auto input_flat = dst_tensor.flat<float>();
-            OP_REQUIRES_OK(context, context->allocate_output(0, output_shape, &output_tensor));
+        if (dst_tensor.dims() == 1) {
+            auto dst_flat = dst_tensor.flat<float>();
             auto output_flat = output_tensor->flat<float>();
-            for (int i = 0; i < N; i++) {
+            for (int i = 0; i < num_src; i++) {
                 output_flat(i) = 0.0f;
             }
 
             if (reduce_method == "sum") {
-                for (int i = 0; i < N; i++) {
-                    output_flat(adjs(i, 0)) += input_flat(i);
+                for (int i = 0; i < num_edge; i++) {
+                    output_flat(adjs(i, 0)) += dst_flat(adjs(i, 1));
                 }
             } else if (reduce_method == "mean") {
-                int counts[max_len];
+                int counts[num_src];
                 memset(counts, 0, sizeof(counts));
-                for (int i = 0; i < N; i++) {
-                    counts[adjs(i, 0)] += 1;
+                for (int p = 0; p < num_edge; p++) {
+                    counts[adjs(p, 0)] += 1;
                 }
 
-                for (int i = 0; i < N; i++) {
+                for (int i = 0; i < num_edge; i++) {
                     int32 k = adjs(i, 0);
                     auto weight = (float) (1.0 / counts[k]);
-                    output_flat(k) += weight * input_flat(i);
+                    output_flat(k) += weight * dst_flat(adjs(i, 1));
                 }
             }
-        } else if (shape.dims() == 2) {
-            auto M = shape.dim_size(1);
-            output_shape.AddDim(M);
-            OP_REQUIRES_OK(context, context->allocate_output(0, output_shape, &output_tensor));
-
-            auto input_matrix = dst_tensor.matrix<float>();
+        } else if (dst_tensor.dims() == 2) {
+            auto feat_dims = dst_tensor.dim_size(1);
+            auto dst_matrix = dst_tensor.matrix<float>();
             auto output_matrix = output_tensor->matrix<float>();
-            for (int i = 0; i < max_len; i++) {
-                for (int j=0; j < M; j++) {
+            for (int i = 0; i < num_src; i++) {
+                for (int j = 0; j < feat_dims; j++) {
                     output_matrix(i, j) = 0.0f;
                 }
             }
 
             if (reduce_method == "sum") {
-                for (int i = 0; i < N; i++) {
-                    int32 k = adjs(i, 0);
-                    for (int j = 0; j < M; j++) {
-                        output_matrix(k, j) += input_matrix(i, j);
+                for (int i = 0; i < num_edge; i++) {
+                    int32 p = adjs(i, 0), q = adjs(i, 1);
+                    for (int j = 0; j < feat_dims; j++) {
+                        output_matrix(p, j) += dst_matrix(q, j);
                     }
                 }
             } else if (reduce_method == "mean") {
-                int counts[max_len];
+                int counts[num_src];
                 memset(counts, 0, sizeof(counts));
-                for (int i = 0; i < N; i++) {
-                    counts[adjs(i, 0)] += 1;
+                for (int p = 0; p < num_edge; p++) {
+                    counts[adjs(p, 0)] += 1;
                 }
 
-                for (int i = 0; i < N; i++) {
-                    int32 k = adjs(i, 0);
-                    auto weight = (float) (1.0 / counts[k]);
-                    for (int j = 0; j < M; j++) {
-                        output_matrix(k, j) += weight * input_matrix(i, j);
+                for (int i = 0; i < num_edge; i++) {
+                    int32 p = adjs(i, 0), q = adjs(i, 1);
+                    auto weight = (float) (1.0 / counts[p]);
+                    for (int j = 0; j < feat_dims; j++) {
+                        output_matrix(p, j) += weight * dst_matrix(q, j);
                     }
                 }
             }
         } else {
             throw "Only 1-D, 2-D tensor supported!";
         }
-
-        context->set_output(0, *output_tensor);
     }
 
 };
