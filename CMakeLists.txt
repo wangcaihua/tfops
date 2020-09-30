@@ -27,7 +27,7 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake;${CMAKE_MODULE_PATH}")
 ###############################################################################
 
 # add the data to the target, so it becomes visible in some IDE
-add_library(tfop SHARED ${sources} ${data})
+add_library(tfop SHARED ${sources} ${data} src/main/kernels/graph_reorder_kernel.cpp)
 
 # just for example add some compiler flags
 target_compile_options(tfop PUBLIC -std=c++1y -Wall -Wfloat-conversion -D_GLIBCXX_USE_CXX11_ABI=0)

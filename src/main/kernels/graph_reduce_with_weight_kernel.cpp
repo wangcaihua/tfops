@@ -3,7 +3,6 @@
 using namespace tensorflow;
 
 class GraphReduceWithWeightOp : public OpKernel {
-
 public:
     explicit GraphReduceWithWeightOp(OpKernelConstruction *context) : OpKernel(context) {}
 

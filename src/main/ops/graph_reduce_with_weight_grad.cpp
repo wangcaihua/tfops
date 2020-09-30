@@ -21,7 +21,8 @@ graph_reduce_with_weight_out:
             .Input("dst_tensor: float32")
             .Input("adj_tensor: int32")
             .Input("weight_tensor: float32")
-            .Output("graph_reduce_with_weight_grad_out: float32")
+            .Output("dst_grad_out: float32")
+            .Output("weight_grad_out: float32")
             .SetShapeFn([](::tensorflow::shape_inference::InferenceContext *c) {
                 c->set_output(0, c->input(1));
                 c->set_output(1, c->input(3));

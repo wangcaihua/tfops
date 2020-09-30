@@ -3,7 +3,6 @@
 using namespace tensorflow;
 
 class GraphReduceWithWeightGradOp : public OpKernel {
-
 public:
     explicit GraphReduceWithWeightGradOp(OpKernelConstruction *context) : OpKernel(context) {}
 
@@ -21,11 +20,11 @@ public:
         const int num_edge = adj_tensor.dim_size(0);
 
         Tensor *dst_grad_tensor = nullptr;
-        Tensor *weight_grad_tensor = nullptr;
         OP_REQUIRES_OK(context, context->allocate_output(0, dst_tensor.shape(), &dst_grad_tensor));
-        OP_REQUIRES_OK(context, context->allocate_output(1, weight_tensor.shape(), &weight_grad_tensor));
-
         auto weight_flat = weight_tensor.flat<float>();
+
+        Tensor *weight_grad_tensor = nullptr;
+        OP_REQUIRES_OK(context, context->allocate_output(1, weight_tensor.shape(), &weight_grad_tensor));
         auto weight_grad_flat = weight_grad_tensor->flat<float>();
 
         auto adjs = adj_tensor.matrix<int32>();
@@ -38,14 +37,14 @@ public:
                 dst_grad_flat(i) = 0.0f;
             }
 
+
             for (int i = 0; i < num_edge; i++) {
                 int32 p = adjs(i, 0), q = adjs(i, 1);
                 dst_grad_flat(q) += weight_flat(i) * src_grad_flat(p);
-                weight_grad_flat(i) = src_grad_flat(p) * dst_flat(p);
+                weight_grad_flat(i) = src_grad_flat(p) * dst_flat(q);
             }
         } else if (grad_tensor.dims() == 2) {
             int64 feat_dims = grad_tensor.dim_size(1);
-            OP_REQUIRES_OK(context, context->allocate_output(1, dst_tensor.shape(), &dst_grad_tensor));
             auto src_grad_matrix = grad_tensor.matrix<float>();
             auto dst_matrix = dst_tensor.matrix<float>();
             auto dst_grad_matrix = dst_grad_tensor->matrix<float>();
@@ -56,14 +55,14 @@ public:
                 }
             }
 
-            for (int i=0; i < num_edge; i++){
+            for (int i = 0; i < num_edge; i++) {
                 weight_grad_flat(i) = 0.0f;
             }
 
             for (int i = 0; i < num_edge; i++) {
                 int32 p = adjs(i, 0), q = adjs(i, 1);
                 auto weight = weight_flat(i);
-                for (int j=0; j< feat_dims; j++) {
+                for (int j = 0; j < feat_dims; j++) {
                     dst_grad_matrix(q, j) += weight * src_grad_matrix(p, j);
                     weight_grad_flat(i) += src_grad_matrix(p, j) * dst_matrix(q, j);
                 }
