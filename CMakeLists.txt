@@ -27,14 +27,15 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake;${CMAKE_MODULE_PATH}")
 ###############################################################################
 
 # add the data to the target, so it becomes visible in some IDE
-add_library(tfop SHARED ${sources} ${data} src/main/kernels/graph_reorder_kernel.cpp)
-
+add_library(tfop SHARED ${sources} ${data})
 # just for example add some compiler flags
-target_compile_options(tfop PUBLIC -std=c++1y -Wall -Wfloat-conversion -D_GLIBCXX_USE_CXX11_ABI=0)
+target_compile_options(tfop PUBLIC -std=c++1y -Wall -Wfloat-conversion -D_GLIBCXX_USE_CXX11_ABI=0
+        -D_MWAITXINTRIN_H_INCLUDED -D_FORCE_INLINES -DNDEBUG)
 
 # this lets me include files relative to the root src dir with a <> pair
 target_include_directories(tfop PUBLIC src/main)
 
+set(CMAKE_VERBOSE_MAKEFILE on)
 
 ###############################################################################
 ## dependencies ###############################################################
@@ -69,12 +70,12 @@ target_include_directories(tfop PUBLIC src/main)
 
 # 用于一键加载引入package所要的INCLUDE/LIBRARY, 下面是一个例子
 find_package(TensorFlow REQUIRED)
-if(TensorFlow_FOUND)
+if (TensorFlow_FOUND)
     target_include_directories(tfop PRIVATE "${TensorFlow_INCLUDE_DIR}")
     target_link_libraries(tfop "${TensorFlow_LIBRARY}")
-else(TensorFlow_FOUND)
+else (TensorFlow_FOUND)
     message(FATAL_ERROR "TensorFlow library not found")
-endif(TensorFlow_FOUND)
+endif (TensorFlow_FOUND)
 
 # target_link_libraries(example PUBLIC ${Boost_LIBRARIES})
 

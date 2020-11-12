@@ -1,4 +1,4 @@
-#include "ps_utils.h"
+#include "ps_shard_data.h"
 
 namespace tensorflow {
 namespace byteps {
@@ -62,5 +62,6 @@ Status CheckShardDataTypes(const PSShard &shard, DataType key_dtype,
   }
   return Status::OK();
 }
+
 } // namespace byteps
 } // namespace tensorflow

@@ -1,20 +1,27 @@
-//
-// Created by bytedance on 2020/11/11.
-//
+#ifndef TFOP_SRC_MAIN_KERNELS_PS_SHARD_DATA_CPP_
+#define TFOP_SRC_MAIN_KERNELS_PS_SHARD_DATA_CPP_
+#define EIGEN_USE_THREADS
 
-#ifndef TFOP_SRC_MAIN_KERNELS_PS_SHARD_DATA_H_
-#define TFOP_SRC_MAIN_KERNELS_PS_SHARD_DATA_H_
+#include <string>
+#include <type_traits>
+#include <utility>
 
 #include "absl/container/flat_hash_map.h"
+#include "ps_utils.h"
 #include "tensorflow/core/framework/bounds_check.h"
 #include "tensorflow/core/framework/lookup_interface.h"
 #include "tensorflow/core/framework/op_kernel.h"
+#include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/framework/resource_mgr.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_shape.h"
+#include "tensorflow/core/framework/types.h"
+#include "tensorflow/core/framework/variant.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/core/status.h"
+#include "tensorflow/core/lib/gtl/inlined_vector.h"
 #include "tensorflow/core/lib/gtl/map_util.h"
+#include "tensorflow/core/lib/hash/hash.h"
 #include "tensorflow/core/platform/macros.h"
 #include "tensorflow/core/platform/thread_annotations.h"
 
@@ -66,6 +73,14 @@ private:
   }
 };
 
+Status GetPSShard(StringPiece input_name, OpKernelContext *ctx,
+                  PSShard **shard);
+
+// Verify that the given key_dtype and value_dtype matches the corresponding
+// table's data types.
+Status CheckShardDataTypes(const PSShard &shard, DataType key_dtype,
+                           DataType value_dtype, const string &table_name);
+
 template <class K, class V> class PSShardOfScalars final : public PSShard {
 public:
   PSShardOfScalars(OpKernelContext *ctx, OpKernel *kernel) {}
@@ -76,9 +91,56 @@ public:
   }
 
   Status Find(OpKernelContext *ctx, const Tensor &key, Tensor *value,
-              const Tensor &default_value) override;
+              const Tensor &default_value) override {
+    const auto key_values = key.flat<K>();
+    auto value_values = value->flat<V>();
+    const auto default_flat = default_value.flat<V>();
 
-  Status DoInsert(bool clear, const Tensor &keys, const Tensor &values);
+    int64 total = value_values.size();
+    int64 default_total = default_flat.size();
+    bool is_full_size_default = (total == default_total);
+
+    tf_shared_lock l(mu_);
+    for (int64 i = 0; i < key_values.size(); ++i) {
+      // is_full_size_default is true:
+      //   Each key has an independent default value, key_values(i)
+      //   corresponding uses default_flat(i) as its default value.
+      //
+      // is_full_size_default is false:
+      //   All keys will share the default_flat(0) as default value.
+      value_values(i) = gtl::FindWithDefault(
+          table_, SubtleMustCopyIfIntegral(key_values(i)),
+          is_full_size_default ? default_flat(i) : default_flat(0));
+
+      auto got = table_.find(key_values(i));
+      if (got != table_.end()) {
+        std::cout << "find key: " << key_values(i) << "\tvalue: " << got->second
+                  << std::endl;
+      } else {
+        std::cout << "find key: " << key_values(i) << "\tnot found"
+                  << std::endl;
+      }
+    }
+
+    return Status::OK();
+  }
+
+  Status DoInsert(bool clear, const Tensor &keys, const Tensor &values) {
+    const auto key_values = keys.flat<K>();
+    const auto value_values = values.flat<V>();
+
+    mutex_lock l(mu_);
+    if (clear) {
+      table_.clear();
+    }
+    for (int64 i = 0; i < key_values.size(); ++i) {
+      gtl::InsertOrUpdate(&table_, SubtleMustCopyIfIntegral(key_values(i)),
+                          SubtleMustCopyIfIntegral(value_values(i)));
+      std::cout << "insert key: " << key_values(i)
+                << "\tvalue: " << value_values(i) << std::endl;
+    }
+    return Status::OK();
+  }
 
   Status Insert(OpKernelContext *ctx, const Tensor &keys,
                 const Tensor &values) override {
@@ -94,7 +156,26 @@ public:
     return DoInsert(true, keys, values);
   }
 
-  Status ExportValues(OpKernelContext *ctx) override;
+  Status ExportValues(OpKernelContext *ctx) override {
+    tf_shared_lock l(mu_);
+    int64 size = table_.size();
+
+    Tensor *keys;
+    Tensor *values;
+    TF_RETURN_IF_ERROR(
+        ctx->allocate_output("keys", TensorShape({size}), &keys));
+    TF_RETURN_IF_ERROR(
+        ctx->allocate_output("values", TensorShape({size}), &values));
+
+    auto keys_data = keys->flat<K>();
+    auto values_data = values->flat<V>();
+    int64 i = 0;
+    for (auto it = table_.begin(); it != table_.end(); ++it, ++i) {
+      keys_data(i) = it->first;
+      values_data(i) = it->second;
+    }
+    return Status::OK();
+  }
 
   int64 MemoryUsed() const override {
     int64 ret = 0;
@@ -117,10 +198,10 @@ public:
 private:
   // virtual ~PSShardOfScalars() = default;
   mutable mutex mu_;
-  std::unordered_map<K, V> table_ GUARDED_BY(mu_);
+  std::unordered_map<K, V> table_;
 };
 
 } // namespace byteps
 } // namespace tensorflow
 
-#endif // TFOP_SRC_MAIN_KERNELS_PS_SHARD_DATA_H_
+#endif // TFOP_SRC_MAIN_KERNELS_PS_SHARD_DATA_CPP_
